@@ -272,5 +272,13 @@ def run_study(rpc_url: str, dataset_path: str, ledger_path: str,
                 summary = {"burst_id": plan.burst_id, "error": str(exc)[:300]}
             log(f"burst done: {summary}")
             summaries.append(summary)
+            # Shakedown circuit breaker: burst 1 IS the pipeline test (the
+            # devnet shakedown could not be funded — airdrops unavailable).
+            # If it does not land and capture cleanly, STOP rather than
+            # spending the study budget on a broken pipeline.
+            if burst_number == 0 and summary.get("landed", 0) < 8:
+                log("SHAKEDOWN GATE FAILED: first burst landed "
+                    f"{summary.get('landed', 0)}/16 — aborting study")
+                break
     log(f"accountant committed total: {accountant.committed} lamports")
     return summaries
