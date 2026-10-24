@@ -45,7 +45,7 @@ def classify_client(version: str | None, in_jito_set: bool = False) -> str:
         return FAMILY_FIREDANCER
     if re.match(r"^0\.\d{3,}\.\d{4,}$", v):
         return FAMILY_FIREDANCER
-    if re.match(r"^\d+\.\d+\.\d+", v):
+    if re.match(r"^[1-9]\d*\.\d+\.\d+", v):
         return FAMILY_JITO if in_jito_set else FAMILY_AGAVE
     return FAMILY_UNKNOWN
 
