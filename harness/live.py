@@ -249,8 +249,13 @@ def run_study(rpc_url: str, dataset_path: str, ledger_path: str,
     rpc = Rpc(rpc_url)
     balance = rpc.call("getBalance", [config.MEASUREMENT_WALLET])["value"]
     log(f"measurement wallet balance: {balance} lamports")
-    if balance < config.CAP_LAMPORTS:
-        raise LiveGateError("wallet balance below the study cap; not firing")
+    # The cumulative cap is enforced by the FeeAccountant per burst; the
+    # wallet gate only needs to cover the next burst's worst-case fees.
+    # (The original balance >= CAP check wrongly assumed an unspent
+    # wallet and blocked resumed runs.)
+    worst_burst = config.BURST_SIZE * (config.BASE_FEE_LAMPORTS + 100_000)
+    if balance < worst_burst:
+        raise LiveGateError("wallet balance cannot cover one burst; not firing")
     seed = _load_seed()
     pub = ed25519.publickey(seed)
     if txbuild.b58encode(pub) != config.MEASUREMENT_WALLET:
