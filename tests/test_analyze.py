@@ -39,15 +39,15 @@ class TestAnalyze(unittest.TestCase):
         from harness.analyze import analyze_dataset
 
         rows = []
-        # one fired burst that landed under two leaders: 10 tx under V1
-        # (arrival order), 6 under V2
-        for pos, i in enumerate(range(10)):
+        # one fired burst that landed under two leaders: 8 tx under V1
+        # (arrival order), 8 under V2
+        for pos, i in enumerate(range(8)):
             rows.append({
                 "burst_id": "b0", "validator_identity": "V1",
                 "client_family": "agave", "send_index": i,
                 "fee_tier": TIERS16[i], "landed_position": pos, "landed": True,
             })
-        for pos, i in enumerate(range(10, 16)):
+        for pos, i in enumerate(range(8, 16)):
             rows.append({
                 "burst_id": "b0", "validator_identity": "V2",
                 "client_family": "agave", "send_index": i,
@@ -60,6 +60,14 @@ class TestAnalyze(unittest.TestCase):
         v1_bursts = result["validators"]["V1"]["bursts"]
         self.assertEqual(len(v1_bursts), 1)
         self.assertGreater(v1_bursts[0]["rho_send"], 0.99)
+        # a fragment under the verdict floor (n < 8) is excluded
+        rows.append({
+            "burst_id": "b1", "validator_identity": "V3",
+            "client_family": "agave", "send_index": 0,
+            "fee_tier": "high", "landed_position": 0, "landed": True,
+        })
+        result2 = analyze_dataset(rows)
+        self.assertNotIn("V3", result2["validators"])
 
     def test_verdict_requires_all_bursts(self):
         fee_corr = {"n": 16, "rho_send": 0.1, "rho_fee": -0.95}
