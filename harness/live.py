@@ -59,23 +59,37 @@ def fire_burst(rpc: Rpc, rpc_url: str, plan: BurstPlan, window: dict,
     """Fire one burst at `window` and record the outcome. Returns a summary."""
     accountant.check(plan.tiers)  # hard cap, before keys/signing/sending
     first_slot = window["first_slot"]
-    # Blockhash as late and as solid as possible: 'confirmed' (the Phase 2
-    # shakedown burst failed with BlockhashNotFound on a 'processed'
-    # blockhash under Alpenglow), fetched ~25 slots before the window,
-    # with signing parallelized (~0.75s/signature serial in pure Python).
-    _wait_for_slot(rpc, first_slot - 25)
-    blockhash = txbuild.b58decode(
-        rpc.call("getLatestBlockhash", [{"commitment": "confirmed"}])["value"]["blockhash"]
-    )
+    # Blockhash discipline (Phase 2 shakedown finding): two bursts failed
+    # preflight with BlockhashNotFound even though the harness's tx bytes
+    # were verified equivalent to web3.js output and a fresh-blockhash
+    # simulation passed. The failure is freshness/skew between the node
+    # that issued the blockhash and the node simulating the send, so the
+    # blockhash is fetched at the last moment AND proven with
+    # isBlockhashValid immediately before firing; signing is parallel
+    # (~0.75s/signature serial in pure Python).
     from multiprocessing import Pool
 
-    jobs = [(seed, tx.tier, tx.send_index, blockhash) for tx in plan.txs]
-    with Pool(processes=8) as pool:
-        built = pool.starmap(txbuild.build_signed_tx, jobs)
-    prepared = [
-        (tx, sig, base64.b64encode(raw).decode())
-        for tx, (raw, sig) in zip(plan.txs, built)
-    ]
+    _wait_for_slot(rpc, first_slot - 10)
+    prepared = None
+    for _attempt in range(3):
+        bh_str = rpc.call(
+            "getLatestBlockhash", [{"commitment": "processed"}]
+        )["value"]["blockhash"]
+        blockhash = txbuild.b58decode(bh_str)
+        jobs = [(seed, tx.tier, tx.send_index, blockhash) for tx in plan.txs]
+        with Pool(processes=8) as pool:
+            built = pool.starmap(txbuild.build_signed_tx, jobs)
+        valid = rpc.call(
+            "isBlockhashValid", [bh_str, {"commitment": "confirmed"}]
+        )["value"]
+        if valid:
+            prepared = [
+                (tx, sig, base64.b64encode(raw).decode())
+                for tx, (raw, sig) in zip(plan.txs, built)
+            ]
+            break
+    if prepared is None:
+        raise LiveGateError("no valid blockhash after 3 attempts")
     _wait_for_slot(rpc, first_slot)
     sent_at = int(time.time())
     with ThreadPoolExecutor(max_workers=16) as pool:
