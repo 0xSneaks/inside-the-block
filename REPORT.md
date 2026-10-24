@@ -1,6 +1,6 @@
 # Inside the Block — how Solana validators order transactions
 
-**Study status:** measurement in progress. Results section is filled from
+**Study status:** complete. Results section is filled from
 `data/live-dataset.jsonl` by `python3 -m harness analyze` when the run
 completes. Everything above the Results heading is final text.
 
@@ -26,7 +26,14 @@ priority-fee order (H2), a client-specific rule (H3), or no stable rule
   105,000 lamports. Study spend was hard-capped at 0.05 SOL in code (the
   fee accountant refuses any burst that would cross it) from a wallet
   funded with 0.058612973 SOL for this study only.
-- **Send path.** One RPC endpoint for every send: Helius mainnet RPC.
+- **Send path.** Primary dataset: the public mainnet RPC endpoint
+  (`api.mainnet-beta.solana.com`). An earlier run over Helius hit
+  recurring preflight BlockhashNotFound rejections that dropped
+  accepted sends; those losses could bias which transactions landed,
+  so the Helius run is archived as pilot data
+  (`data/pilot-helius-dataset.jsonl`) and is not part of the primary
+  analysis. The public path completed 24 of 24 bursts with zero send
+  errors and 16/16 landings in every burst.
   Transactions are pre-signed, then fired concurrently at the target
   leader window; each blockhash is proven with `isBlockhashValid`
   immediately before firing.
@@ -90,7 +97,36 @@ priority-fee order (H2), a client-specific rule (H3), or no stable rule
 
 ## Results
 
-_(filled at analysis time from the published dataset)_
+**Headline: H0 — no stable ordering rule.** Across 400 measured
+transactions (24 aimed bursts of 16 plus a 16-transaction probe) and
+22 validators with qualifying groups, no validator with repeated
+qualifying bursts ordered its block by priority fee or by send order
+consistently. Per-validator verdicts under the pre-registered rule
+(all qualifying bursts must agree, |rho| ≥ 0.7):
+
+- **no-pattern: 19 of 22 validators** — jito-solana 11, firedancer 7,
+  agave 1.
+- **mixed: 1** (jito-solana; one fee-ordered burst, one no-pattern).
+- **fee-ordered: 1** and **arrival-ordered: 1** — both jito-solana,
+  both from a single qualifying burst each. Across 22 validators,
+  isolated single-burst correlations at the threshold are what noise
+  produces; neither survives as a validator-level rule.
+- The validators with the most evidence agree with the headline: the
+  one agave validator with 3 qualifying bursts (5Us18hLZ…) scored
+  no-pattern in all three; the two-burst jito-solana validators scored
+  no-pattern/no-pattern and fee/none (mixed).
+
+Family rollup: jito-solana 14 validators (1 fee, 1 arrival, 1 mixed,
+11 none), firedancer 7 (all none), agave 1 (none, 3 bursts).
+Coverage exceeds the design minimums: 22 validators (≥6 required),
+3 client families (≥3 required).
+
+**Money.** Actual on-chain spend: 29,635,000 lamports
+(0.029635 SOL), measured as the funding balance minus the final
+wallet balance (58,612,973 → 28,977,973 lamports). The fee
+accountant's committed total, 31,390,000 lamports, is the planned-fee
+upper bound and stayed under the 0.05 SOL hard cap at all times; the
+actual spend came in below it, as designed.
 
 ## Reproduce
 
