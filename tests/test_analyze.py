@@ -35,6 +35,32 @@ class TestAnalyze(unittest.TestCase):
         corr = burst_correlations(rows)
         self.assertLess(corr["rho_fee"], -0.7)
 
+    def test_split_burst_attributed_per_landed_leader(self):
+        from harness.analyze import analyze_dataset
+
+        rows = []
+        # one fired burst that landed under two leaders: 10 tx under V1
+        # (arrival order), 6 under V2
+        for pos, i in enumerate(range(10)):
+            rows.append({
+                "burst_id": "b0", "validator_identity": "V1",
+                "client_family": "agave", "send_index": i,
+                "fee_tier": TIERS16[i], "landed_position": pos, "landed": True,
+            })
+        for pos, i in enumerate(range(10, 16)):
+            rows.append({
+                "burst_id": "b0", "validator_identity": "V2",
+                "client_family": "agave", "send_index": i,
+                "fee_tier": TIERS16[i], "landed_position": pos, "landed": True,
+            })
+        result = analyze_dataset(rows)
+        self.assertIn("V1", result["validators"])
+        self.assertIn("V2", result["validators"])
+        # V1's sub-burst is perfectly arrival-ordered
+        v1_bursts = result["validators"]["V1"]["bursts"]
+        self.assertEqual(len(v1_bursts), 1)
+        self.assertGreater(v1_bursts[0]["rho_send"], 0.99)
+
     def test_verdict_requires_all_bursts(self):
         fee_corr = {"n": 16, "rho_send": 0.1, "rho_fee": -0.95}
         v = validator_verdict([fee_corr, fee_corr, fee_corr])

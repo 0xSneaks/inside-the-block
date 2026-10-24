@@ -89,17 +89,22 @@ def validator_verdict(burst_corrs: list[dict]) -> dict:
 
 def analyze_dataset(rows: list[dict]) -> dict:
     """Full pre-registered analysis over a dataset (list of records)."""
-    bursts: dict[str, list[dict]] = {}
-    meta: dict[str, dict] = {}
+    # A fired burst can split across two leaders' windows; DESIGN.md takes
+    # validator identity from the block data itself, so records are grouped
+    # by (burst, landed leader) — a split burst contributes one sub-burst
+    # per leader it actually landed under.
+    bursts: dict[tuple, list[dict]] = {}
+    meta: dict[tuple, dict] = {}
     for r in rows:
-        bursts.setdefault(r["burst_id"], []).append(r)
-        meta[r["burst_id"]] = {
+        key = (r["burst_id"], r.get("validator_identity"))
+        bursts.setdefault(key, []).append(r)
+        meta[key] = {
             "validator": r.get("validator_identity"),
             "family": r.get("client_family"),
         }
     per_validator: dict[str, list[dict]] = {}
-    for burst_id, brows in bursts.items():
-        v = meta[burst_id]["validator"] or "UNKNOWN_VALIDATOR"
+    for key, brows in bursts.items():
+        v = meta[key]["validator"] or "UNKNOWN_VALIDATOR"
         per_validator.setdefault(v, []).append(burst_correlations(brows))
     validators = {}
     for v, corrs in per_validator.items():

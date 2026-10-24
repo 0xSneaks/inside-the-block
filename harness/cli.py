@@ -111,6 +111,27 @@ def cmd_analyze(args) -> int:
     return 0
 
 
+def cmd_live_study(args) -> int:
+    if not args.live:
+        print("live-study requires --live (dry-run is the default posture)",
+              file=sys.stderr)
+        return 2
+    rpc_url = os.environ.get("HARNESS_RPC_URL")
+    if not rpc_url:
+        print("HARNESS_RPC_URL is not set", file=sys.stderr)
+        return 2
+    from .live import run_study
+
+    os.makedirs("data", exist_ok=True)
+    summaries = run_study(
+        rpc_url,
+        os.path.join("data", "live-dataset.jsonl"),
+        os.path.join("data", "fee-ledger.json"),
+    )
+    print(json.dumps(summaries, indent=2))
+    return 0
+
+
 def cmd_send(args) -> int:
     if not args.live:
         print("send requires --live (dry-run is the default posture)", file=sys.stderr)
@@ -136,6 +157,9 @@ def main(argv=None) -> int:
     a = sub.add_parser("analyze")
     a.add_argument("dataset")
     a.set_defaults(fn=cmd_analyze)
+    ls = sub.add_parser("live-study")
+    ls.add_argument("--live", action="store_true")
+    ls.set_defaults(fn=cmd_live_study)
     s = sub.add_parser("send")
     s.add_argument("--live", action="store_true")
     s.add_argument("--validator", required=True)
