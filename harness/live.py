@@ -101,27 +101,45 @@ def fire_burst(rpc: Rpc, rpc_url: str, plan: BurstPlan, window: dict,
             sent_sigs[sig] = tx
         else:
             send_errors[tx.send_index] = err
-    # Capture: give the chain time to produce the window's blocks, then scan
-    # a slot range around the window for our signatures. Two passes: a block
-    # that is not fetchable yet must not be recorded as "not landed".
+    # Capture BY SIGNATURE, not by block scan (Phase 2 shakedown finding:
+    # accepted transactions landed 109-125 slots after the target window —
+    # a block scan around the window missed every one). Poll signature
+    # statuses for the exact landed slot, then read that block for the
+    # position. Attribution is by the leader of the landed slot.
     found: dict[str, tuple[int, dict]] = {}
-    for attempt in range(2):
-        if attempt:
-            time.sleep(20)
-        missing = [s for s in sent_sigs if s not in found]
-        if not missing:
-            break
-        time.sleep(25 if attempt == 0 else 0)
-        for slot in range(first_slot - 2, window["last_slot"] + 12):
+    sig_list = list(sent_sigs.keys())
+    deadline = time.time() + 120
+    remaining = set(sig_list)
+    while remaining and time.time() < deadline:
+        time.sleep(10)
+        try:
+            statuses = rpc.call(
+                "getSignatureStatuses",
+                [list(remaining), {"searchTransactionHistory": True}],
+            )["value"]
+        except Exception:
+            continue
+        landed_slots = {}
+        for sig, st in zip(list(remaining), statuses):
+            if st and st.get("slot"):
+                landed_slots[sig] = st["slot"]
+        for sig, slot in landed_slots.items():
+            # Extend leader attribution coverage if the tx landed beyond
+            # the pre-fetched map.
+            if slot not in slot_leaders:
+                slot_leaders.update(
+                    leaders.fetch_slot_leaders(rpc, slot - 8, 32))
             try:
                 block = rpc.get_block(slot)
             except Exception:
                 block = None
-            if not block:
-                continue
-            hits = locate_in_block(block, missing)
-            for sig, loc in hits.items():
-                found[sig] = (slot, loc)
+            if block:
+                hits = locate_in_block(block, [sig])
+                if sig in hits:
+                    found[sig] = (slot, hits[sig])
+                    remaining.discard(sig)
+        # sigs with a status slot but an unfetchable block stay in
+        # `remaining` and are retried until the deadline.
     landed = 0
     for tx, sig, _ in prepared:
         if sig in found:

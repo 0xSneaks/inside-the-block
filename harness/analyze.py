@@ -16,6 +16,14 @@ from . import config
 
 TIER_RANK = {name: i for i, name in enumerate(["zero", "low", "mid", "high"])}
 RHO_THRESHOLD = 0.7
+# A fired burst can fragment across leaders (landing lag, Phase 2 finding).
+# A fragment with fewer than half the burst's transactions under one leader
+# is spill, not a burst: it is counted in the dataset but excluded from
+# verdicts. (Methodology amendment, disclosed in the report: the original
+# design assumed in-window landing; attribution by landed slot — which the
+# design itself specifies — makes fragments possible, and a verdict rule
+# for them has to exist. The rule is uniform and content-blind.)
+MIN_SUBBURST_N = 8
 
 
 def _ranks(values: list[float]) -> list[float]:
@@ -105,7 +113,10 @@ def analyze_dataset(rows: list[dict]) -> dict:
     per_validator: dict[str, list[dict]] = {}
     for key, brows in bursts.items():
         v = meta[key]["validator"] or "UNKNOWN_VALIDATOR"
-        per_validator.setdefault(v, []).append(burst_correlations(brows))
+        corr = burst_correlations(brows)
+        if corr["n"] < MIN_SUBBURST_N:
+            continue  # spill fragment: counted in the dataset, not a burst
+        per_validator.setdefault(v, []).append(corr)
     validators = {}
     for v, corrs in per_validator.items():
         fam = next(
