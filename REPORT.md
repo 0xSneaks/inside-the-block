@@ -47,6 +47,9 @@ priority-fee order (H2), a client-specific rule (H3), or no stable rule
   vs send order and vs fee tier per (burst, landed leader); a validator
   is fee- or arrival-ordered only if the pattern holds across all of its
   bursts with |rho| ≥ 0.7; families aggregate identified validators only.
+  Sign convention: fee tiers rank zero < low < mid < high, so a
+  **negative rho_fee means higher fee landed earlier** (fee-ordered);
+  rho_send is positive when landed order follows send order.
 
 ## Environment findings that changed the tooling (all 2026-10-24)
 
@@ -115,6 +118,26 @@ consistently. Per-validator verdicts under the pre-registered rule
   one agave validator with 3 qualifying bursts (5Us18hLZ…) scored
   no-pattern in all three; the two-burst jito-solana validators scored
   no-pattern/no-pattern and fee/none (mixed).
+- **The two "ordered" verdicts are two halves of one burst.**
+  burst-021 split 8/8 across two leaders: one half scored
+  arrival-ordered (HEL1USMZ…, rho_send 0.76), the other fee-ordered
+  (9iFPQbP1…, rho_fee −0.78). The same 16 transactions, with the same
+  send order and fee structure, produced opposite "rules" on two
+  leaders — the single strongest piece of evidence that these
+  threshold crossings are jitter, not policy.
+- **Sensitivity to the fragment floor.** The verdicts above use the
+  disclosed n ≥ 8 floor. Re-running the analysis at floor n ≥ 4 gives
+  24 validators, 20 no-pattern (83%); at floor n ≥ 1 (every fragment)
+  31 validators, 26 no-pattern (84%) — the no-pattern share is stable
+  (84–86%) at every floor, and the extra "ordered" verdicts that
+  appear at lower floors are all single fragments of n = 4–7, where
+  the |rho| ≥ 0.7 threshold is easiest to trip by chance. The headline
+  does not depend on the amendment.
+- **Scope.** H0 is a block-level claim: no rule predicts the final
+  in-block order of a burst. It does not rule out ordering inside a
+  leader's parallel execution threads whose outputs interleave; such
+  thread-level rules, if they exist, are invisible in block data for
+  bursts of this size.
 
 Family rollup: jito-solana 14 validators (1 fee, 1 arrival, 1 mixed,
 11 none), firedancer 7 (all none), agave 1 (none, 3 bursts).
