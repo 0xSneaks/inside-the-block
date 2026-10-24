@@ -1,0 +1,5 @@
+services:
+  harness:
+    build: .
+    volumes:
+      - ./data:/app/data
