@@ -59,14 +59,23 @@ def fire_burst(rpc: Rpc, rpc_url: str, plan: BurstPlan, window: dict,
     """Fire one burst at `window` and record the outcome. Returns a summary."""
     accountant.check(plan.tiers)  # hard cap, before keys/signing/sending
     first_slot = window["first_slot"]
-    _wait_for_slot(rpc, first_slot - 45)
+    # Blockhash as late and as solid as possible: 'confirmed' (the Phase 2
+    # shakedown burst failed with BlockhashNotFound on a 'processed'
+    # blockhash under Alpenglow), fetched ~25 slots before the window,
+    # with signing parallelized (~0.75s/signature serial in pure Python).
+    _wait_for_slot(rpc, first_slot - 25)
     blockhash = txbuild.b58decode(
-        rpc.call("getLatestBlockhash", [{"commitment": "processed"}])["value"]["blockhash"]
+        rpc.call("getLatestBlockhash", [{"commitment": "confirmed"}])["value"]["blockhash"]
     )
-    prepared = []
-    for tx in plan.txs:
-        raw, sig = txbuild.build_signed_tx(seed, tx.tier, tx.send_index, blockhash)
-        prepared.append((tx, sig, base64.b64encode(raw).decode()))
+    from multiprocessing import Pool
+
+    jobs = [(seed, tx.tier, tx.send_index, blockhash) for tx in plan.txs]
+    with Pool(processes=8) as pool:
+        built = pool.starmap(txbuild.build_signed_tx, jobs)
+    prepared = [
+        (tx, sig, base64.b64encode(raw).decode())
+        for tx, (raw, sig) in zip(plan.txs, built)
+    ]
     _wait_for_slot(rpc, first_slot)
     sent_at = int(time.time())
     with ThreadPoolExecutor(max_workers=16) as pool:
@@ -261,8 +270,20 @@ def run_study(rpc_url: str, dataset_path: str, ledger_path: str,
         }, fh)
     accountant = FeeAccountant(ledger_path)
     summaries = []
+    # Burst numbering continues after any bursts already in the dataset,
+    # so a resumed/top-up run never reuses an id.
+    start_number = 0
+    if os.path.exists(dataset_path):
+        import re as _re
+
+        with open(dataset_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                m = _re.search(r'"burst-(\d+)"', line)
+                if m:
+                    start_number = max(start_number, int(m.group(1)) + 1)
     with DatasetWriter(dataset_path) as writer:
-        for burst_number, (window, t) in enumerate(firing):
+        for i, (window, t) in enumerate(firing):
+            burst_number = start_number + i
             plan = plan_burst(f"burst-{burst_number:03d}", burst_number, t["identity"])
             try:
                 summary = fire_burst(rpc, rpc_url, plan, window, slot_leaders,
@@ -276,7 +297,7 @@ def run_study(rpc_url: str, dataset_path: str, ledger_path: str,
             # devnet shakedown could not be funded — airdrops unavailable).
             # If it does not land and capture cleanly, STOP rather than
             # spending the study budget on a broken pipeline.
-            if burst_number == 0 and summary.get("landed", 0) < 8:
+            if i == 0 and summary.get("landed", 0) < 8:
                 log("SHAKEDOWN GATE FAILED: first burst landed "
                     f"{summary.get('landed', 0)}/16 — aborting study")
                 break

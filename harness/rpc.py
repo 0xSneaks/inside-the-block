@@ -28,23 +28,39 @@ class Rpc:
         self._id = 0
 
     def call(self, method: str, params: list | None = None):
-        self._id += 1
-        body = json.dumps(
-            {"jsonrpc": "2.0", "id": self._id, "method": method, "params": params or []}
-        ).encode()
-        req = urllib.request.Request(
-            self.url,
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "User-Agent": "inside-the-block-harness/0.1",
-            },
-        )
-        with self._opener.open(req, timeout=30) as resp:
-            payload = json.loads(resp.read().decode())
-        if "error" in payload:
-            raise RpcError(f"{method}: {payload['error']}")
-        return payload["result"]
+        import time
+        import urllib.error
+
+        last_exc = None
+        for attempt in range(4):
+            self._id += 1
+            body = json.dumps(
+                {"jsonrpc": "2.0", "id": self._id, "method": method,
+                 "params": params or []}
+            ).encode()
+            req = urllib.request.Request(
+                self.url,
+                data=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "inside-the-block-harness/0.1",
+                },
+            )
+            try:
+                with self._opener.open(req, timeout=30) as resp:
+                    payload = json.loads(resp.read().decode())
+            except urllib.error.HTTPError as exc:
+                # 429 = the request was rejected before processing, so a
+                # retry cannot double-send. Back off and retry.
+                if exc.code == 429 and attempt < 3:
+                    last_exc = exc
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                raise
+            if "error" in payload:
+                raise RpcError(f"{method}: {payload['error']}")
+            return payload["result"]
+        raise last_exc  # pragma: no cover
 
     # --- study-specific helpers -------------------------------------------------
     def get_epoch_info(self) -> dict:
