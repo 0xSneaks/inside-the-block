@@ -28,7 +28,15 @@ from .fees import FeeAccountant
 from .rpc import Rpc
 from .sender import LiveGateError, _load_seed
 
-SLOT_SECONDS = 0.4
+# Measured on mainnet 2026-10-24 (post-Alpenglow): ~0.216 s/slot, not the
+# pre-Alpenglow 0.4 s. Used only for sleep pacing in _wait_for_slot.
+SLOT_SECONDS = 0.216
+
+# Measured landing delay (Phase 2, both RPC paths): a fired burst is
+# included ~110 slots after submission, tightly clustered. Bursts are
+# therefore AIMED: fired this many slots before the window they are meant
+# to land in. Attribution never relies on the aim — it uses landed slots.
+AIM_OFFSET_SLOTS = 110
 
 
 def _slot(rpc: Rpc) -> int:
@@ -40,7 +48,7 @@ def _wait_for_slot(rpc: Rpc, target: int) -> None:
         now = _slot(rpc)
         if now >= target:
             return
-        time.sleep(min(2.0, max(0.2, (target - now) * SLOT_SECONDS * 0.7)))
+        time.sleep(min(2.0, max(0.15, (target - now) * SLOT_SECONDS * 0.7)))
 
 
 def _send_one(url: str, raw_b64: str) -> tuple[str | None, str | None]:
@@ -59,6 +67,7 @@ def fire_burst(rpc: Rpc, rpc_url: str, plan: BurstPlan, window: dict,
     """Fire one burst at `window` and record the outcome. Returns a summary."""
     accountant.check(plan.tiers)  # hard cap, before keys/signing/sending
     first_slot = window["first_slot"]
+    fire_slot = first_slot - AIM_OFFSET_SLOTS  # aim: land IN the window
     # Blockhash discipline (Phase 2 shakedown finding): two bursts failed
     # preflight with BlockhashNotFound even though the harness's tx bytes
     # were verified equivalent to web3.js output and a fresh-blockhash
@@ -69,7 +78,7 @@ def fire_burst(rpc: Rpc, rpc_url: str, plan: BurstPlan, window: dict,
     # (~0.75s/signature serial in pure Python).
     from multiprocessing import Pool
 
-    _wait_for_slot(rpc, first_slot - 10)
+    _wait_for_slot(rpc, fire_slot - 10)
     prepared = None
     for _attempt in range(3):
         bh_str = rpc.call(
@@ -90,7 +99,7 @@ def fire_burst(rpc: Rpc, rpc_url: str, plan: BurstPlan, window: dict,
             break
     if prepared is None:
         raise LiveGateError("no valid blockhash after 3 attempts")
-    _wait_for_slot(rpc, first_slot)
+    _wait_for_slot(rpc, fire_slot)
     sent_at = int(time.time())
     with ThreadPoolExecutor(max_workers=16) as pool:
         results = list(pool.map(lambda p: _send_one(rpc_url, p[2]), prepared))
@@ -274,7 +283,7 @@ def run_study(rpc_url: str, dataset_path: str, ledger_path: str,
         ident = w["identity"]
         if counts.get(ident, 0) >= config.BURSTS_PER_VALIDATOR:
             continue
-        if w["first_slot"] < now_slot + 120:
+        if w["first_slot"] < now_slot + AIM_OFFSET_SLOTS + 240:
             continue
         if w["first_slot"] - last_for_validator.get(ident, -10**9) < 1500:
             continue
