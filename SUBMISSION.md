@@ -2,7 +2,7 @@
 
 **Submitted by:** Halfmoon Studio (@gethalfmoon)
 **Payout address (Solana):** 2RCiezWiYHMULwXdn1MCxs82SDRWLK8QxQVAUGMFAXvJ
-**Public repo:** <created on approval — contents = this repo: code, DESIGN.md, REPORT.md, full dataset>
+**Public repo:** https://github.com/0xSneaks/inside-the-block
 **Deadline:** 2026-11-05 21:59 UTC
 
 ---
@@ -52,8 +52,8 @@ evidence. Total on-chain spend: 0.029635 SOL against a hard-capped
 
 ## Pre-submission checklist (Muse, before Sneaks approves)
 
-- [ ] Sneaks approves this entry text
-- [ ] Sneaks approves creating the PUBLIC GitHub repo from this local repo
+- [x] Sneaks approves this entry text
+- [x] Sneaks approves creating the PUBLIC GitHub repo from this local repo
       (contents: harness/, tests/, DESIGN.md, README.md, REPORT.md,
       data/live-dataset.jsonl + pilot archive; NO keys, NO logs with secrets)
 - [ ] Confirm a Superteam submission credit is valid on submission day
