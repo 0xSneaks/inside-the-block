@@ -111,9 +111,20 @@ consistently. Per-validator verdicts under the pre-registered rule
   agave 1.
 - **mixed: 1** (jito-solana; one fee-ordered burst, one no-pattern).
 - **fee-ordered: 1** and **arrival-ordered: 1** — both jito-solana,
-  both from a single qualifying burst each. Across 22 validators,
-  isolated single-burst correlations at the threshold are what noise
-  produces; neither survives as a validator-level rule.
+  both from a single qualifying burst each. Neither meets the
+  pre-registered rule beyond its single burst, so neither is a
+  validator-level rule.
+- **Pooled check (exploratory, not pre-registered).** Averaging the
+  per-group correlations across all 26 qualifying groups (weighted by
+  group size) gives rho_fee = −0.140 (19 of 26 groups negative) and
+  rho_send = +0.095. A permutation test — landed positions shuffled
+  within each (burst, leader) group, preserving group structure;
+  2,000 runs, seed 42 — puts the pooled rho_fee at p ≈ 0.007
+  one-sided. So in aggregate there is a weak tendency for higher
+  fees to land earlier. It is far too weak and inconsistent to
+  predict any individual validator's ordering, which is the claim
+  H0 makes; H0 in this report is a validator-level claim only, not
+  a claim that fees have zero average effect.
 - The validators with the most evidence agree with the headline: the
   one agave validator with 3 qualifying bursts (5Us18hLZ…) scored
   no-pattern in all three; the two-burst jito-solana validators scored
@@ -123,16 +134,19 @@ consistently. Per-validator verdicts under the pre-registered rule
   arrival-ordered (HEL1USMZ…, rho_send 0.76), the other fee-ordered
   (9iFPQbP1…, rho_fee −0.78). The same 16 transactions, with the same
   send order and fee structure, produced opposite "rules" on two
-  leaders — the single strongest piece of evidence that these
-  threshold crossings are jitter, not policy.
+  leaders — which undercuts reading either half's label as that
+  leader's policy, and is consistent with jitter. It does not by
+  itself prove a mechanism.
 - **Sensitivity to the fragment floor.** The verdicts above use the
   disclosed n ≥ 8 floor. Re-running the analysis at floor n ≥ 4 gives
-  24 validators, 20 no-pattern (83%); at floor n ≥ 1 (every fragment)
-  31 validators, 26 no-pattern (84%) — the no-pattern share is stable
-  (84–86%) at every floor, and the extra "ordered" verdicts that
-  appear at lower floors are all single fragments of n = 4–7, where
-  the |rho| ≥ 0.7 threshold is easiest to trip by chance. The headline
-  does not depend on the amendment.
+  24 validators, 20 no-pattern (83%) — a similar share, offered as
+  descriptive robustness only. Undefined correlations: Spearman rho
+  is undefined for n < 3 or a constant fee tier, and the code records
+  0.0 in those cases. At floors n ≥ 8 and n ≥ 4 there are ZERO such
+  groups (0 of 26 and 0 of 28), so no verdict or sensitivity figure
+  above rests on an undefined value. Below floor 4 such groups exist
+  (6 of 36 groups at floor n ≥ 1); no floor-1 figures are used
+  anywhere in this report.
 - **Scope.** H0 is a block-level claim: no rule predicts the final
   in-block order of a burst. It does not rule out ordering inside a
   leader's parallel execution threads whose outputs interleave; such

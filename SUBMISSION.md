@@ -26,11 +26,16 @@ a validator's qualifying bursts to agree).
 
 **Result: no stable ordering rule (H0).** 19 of 22 validators showed
 no pattern; 1 was mixed; the 2 single-burst "ordered" results are
-consistent with noise at this sample size. The validators with the
-most bursts agree: the 3-burst agave validator was no-pattern in all
-three. In plain terms: for ordinary self-transfers at these fee
-levels, neither arrival order nor priority fee reliably predicted
-in-block position on any client family we measured.
+the two halves of one burst that split across two leaders, and meet
+no all-bursts rule. The validators with the most bursts agree: the
+3-burst agave validator was no-pattern in all three. One honest
+qualification: pooled across all 26 groups, higher fees landed
+slightly earlier on average (size-weighted rho_fee ≈ −0.14,
+permutation p ≈ 0.007) — a weak aggregate tendency, far too
+inconsistent to predict any individual validator's ordering. In
+plain terms: for ordinary self-transfers at these fee levels,
+neither arrival order nor priority fee reliably predicted in-block
+position on any client family we measured.
 
 **Verifiability.** The full raw dataset — every signature, slot,
 block position, fee tier and send index — ships in the repo
