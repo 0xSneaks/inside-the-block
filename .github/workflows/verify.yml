@@ -1,0 +1,25 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run the test suite
+        run: python3 -m unittest discover -s tests -t .
+      - name: Reproduce the headline analysis from the published dataset
+        run: python3 -m harness analyze data/live-dataset.jsonl
+
+  docker-repro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: One-command reproduction (tests + simulated pipeline)
+        run: docker compose run --rm harness
